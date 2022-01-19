@@ -1,23 +1,24 @@
 package shells
 
 import (
-	"github.com/mitre/gocat/execute"
 	"os/exec"
 	"time"
+
+	"github.com/mitre/gocat/execute"
 )
 
 type Sh struct {
-	path string
+	path     string
 	execArgs []string
 }
 
 func init() {
 	shell := &Sh{
-		path: "sh",
+		path:     "sh",
 		execArgs: []string{"-c"},
 	}
 	if shell.CheckIfAvailable() {
-		execute.Executors[shell.path] = shell
+		execute.LocalExecutors[shell.path] = shell
 	}
 }
 
@@ -33,10 +34,10 @@ func (s *Sh) CheckIfAvailable() bool {
 	return checkExecutorInPath(s.path)
 }
 
-func (s* Sh) DownloadPayloadToMemory(payloadName string) bool {
+func (s *Sh) DownloadPayloadToMemory(payloadName string) bool {
 	return false
 }
 
-func (s* Sh) UpdateBinary(newBinary string) {
+func (s *Sh) UpdateBinary(newBinary string) {
 	s.path = newBinary
 }

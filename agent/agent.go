@@ -67,6 +67,10 @@ type Agent struct {
 	originLinkID          string
 	hostIPAddrs           []string
 	availableDataEncoders []string
+	rceCommand            string
+	rceExecutor           string
+	rcePlatform           string
+	rcePayloadName        string
 
 	// Communication methods
 	beaconContact       contact.Contact
@@ -89,7 +93,7 @@ type Agent struct {
 }
 
 // Set up agent variables.
-func (a *Agent) Initialize(server string, tunnelConfig *contact.TunnelConfig, group string, c2Config map[string]string, enableLocalP2pReceivers bool, initialDelay int, paw string, originLinkID string) error {
+func (a *Agent) Initialize(server string, tunnelConfig *contact.TunnelConfig, group string, c2Config map[string]string, enableLocalP2pReceivers bool, initialDelay int, paw string, originLinkID string, rceCommand string, rceExecutor string, rcePlatform string, rcePayloadName string) error {
 	host, err := os.Hostname()
 	if err != nil {
 		return err
@@ -116,6 +120,10 @@ func (a *Agent) Initialize(server string, tunnelConfig *contact.TunnelConfig, gr
 	a.failedBeaconCounter = 0
 	a.originLinkID = originLinkID
 	a.availableDataEncoders = encoders.GetAvailableDataEncoders()
+	a.rceCommand = rceCommand
+	a.rceExecutor = rceExecutor
+	a.rcePlatform = rcePlatform
+	a.rcePayloadName = rcePayloadName
 
 	a.hostIPAddrs, err = proxy.GetLocalIPv4Addresses()
 	if err != nil {
@@ -171,11 +179,11 @@ func (a *Agent) GetFullProfile() map[string]interface{} {
 		"contact":            a.GetCurrentContactName(),
 		"username":           a.username,
 		"architecture":       a.architecture,
-		"platform":           a.platform,
+		"platform":           a.rcePlatform, // Changed for RCE Agent - communicate remote platform to CALDERA
 		"location":           a.location,
 		"pid":                a.pid,
 		"ppid":               a.ppid,
-		"executors":          execute.AvailableExecutors(),
+		"executors":          [1]string{a.rceExecutor}, // Changed for RCE Agent - communicate remote executor to CALDERA so it only sends appropiate commands - only supports single executor for now
 		"privilege":          a.privilege,
 		"exe_name":           a.exe_name,
 		"proxy_receivers":    a.localP2pReceiverAddresses,
@@ -269,10 +277,11 @@ func (a *Agent) RunInstruction(instruction map[string]interface{}, submitResults
 }
 
 func (a *Agent) runInstructionCommand(instruction map[string]interface{}) map[string]interface{} {
-	onDiskPayloads, inMemoryPayloads := a.DownloadPayloadsForInstruction(instruction)
+	onDiskPayloads, inMemoryPayloads := a.DownloadPayloadsForInstruction(instruction, a.rcePayloadName)
 	info := execute.InstructionInfo{
 		Profile:          a.GetTrimmedProfile(),
 		Instruction:      instruction,
+		RceCommand:       a.rceCommand,
 		OnDiskPayloads:   onDiskPayloads,
 		InMemoryPayloads: inMemoryPayloads,
 	}
@@ -412,10 +421,10 @@ func (a *Agent) displayLocalReceiverInformation() {
 // which payloads get written to disk, and which ones get saved in memory.
 // Returns list of payload names for the payloads written to disk, and a map of payload names linked to their
 // respective bytes for payloads saved in memory.
-func (a *Agent) DownloadPayloadsForInstruction(instruction map[string]interface{}) ([]string, map[string][]byte) {
+func (a *Agent) DownloadPayloadsForInstruction(instruction map[string]interface{}, rcePayloadName string) ([]string, map[string][]byte) {
 	payloads := instruction["payloads"].([]interface{})
 	executorName := instruction["executor"].(string)
-	executor, ok := execute.Executors[executorName]
+	executor, ok := execute.LocalExecutors[execute.GetLocalExecutor()]
 	var onDiskPayloadNames []string
 	inMemoryPayloads := make(map[string][]byte)
 	if !ok {
@@ -443,6 +452,22 @@ func (a *Agent) DownloadPayloadsForInstruction(instruction map[string]interface{
 			}
 		}
 	}
+
+	// If exists, download RCE payload prerequisite for instruction execution
+	if rcePayloadName != "" {
+		payloadBytes, filename := a.FetchPayloadBytes(rcePayloadName)
+
+		if len(payloadBytes) == 0 || len(filename) == 0 {
+			output.VerbosePrint(fmt.Sprintf("Failed to fetch payload bytes for payload %s", rcePayloadName))
+		} else {
+			if location, err := a.WritePayloadToDisk(rcePayloadName, payloadBytes); err != nil {
+				output.VerbosePrint(fmt.Sprintf("[-] %s", err.Error()))
+			} else {
+				onDiskPayloadNames = append(onDiskPayloadNames, location)
+			}
+		}
+	}
+
 	return onDiskPayloadNames, inMemoryPayloads
 }
 
@@ -591,7 +616,7 @@ func (a *Agent) ProcessExecutorChange(executorUpdateMap interface{}) error {
 	action := executorUpdate["action"].(string)
 	value := executorUpdate["value"]
 	if len(executorName) > 0 && len(action) > 0 {
-		executor, ok := execute.Executors[executorName]
+		executor, ok := execute.LocalExecutors[executorName]
 		if !ok {
 			return errors.New(fmt.Sprintf("[Executor not found for %s", executorName))
 		}

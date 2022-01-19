@@ -11,21 +11,20 @@ import (
 	"github.com/mitre/gocat/contact"
 	"github.com/mitre/gocat/output"
 
-	_ "github.com/mitre/gocat/execute/donut"     // necessary to initialize all submodules
-	_ "github.com/mitre/gocat/execute/shellcode" // necessary to initialize all submodules
-	_ "github.com/mitre/gocat/execute/shells"    // necessary to initialize all submodules
+	_ "github.com/mitre/gocat/execute/remote" // necessary to initialize all submodules
+	_ "github.com/mitre/gocat/execute/shells" // necessary to initialize all submodule
 )
 
 // Initializes and returns sandcat agent.
-func initializeCore(server string, tunnelConfig *contact.TunnelConfig, group string, contactConfig map[string]string, p2pReceiversOn bool, initialDelay int, verbose bool, paw string, originLinkID string) (*agent.Agent, error) {
+func initializeCore(server string, tunnelConfig *contact.TunnelConfig, group string, contactConfig map[string]string, p2pReceiversOn bool, initialDelay int, verbose bool, paw string, originLinkID string, rceCommand string, rceExecutor string, rcePlatform string, rcePayloadName string) (*agent.Agent, error) {
 	output.SetVerbose(verbose)
 	output.VerbosePrint("Starting sandcat in verbose mode.")
-	return agent.AgentFactory(server, tunnelConfig, group, contactConfig, p2pReceiversOn, initialDelay, paw, originLinkID)
+	return agent.AgentFactory(server, tunnelConfig, group, contactConfig, p2pReceiversOn, initialDelay, paw, originLinkID, rceCommand, rceExecutor, rcePlatform, rcePayloadName)
 }
 
 //Core is the main function as wrapped by sandcat.go
-func Core(server string, tunnelConfig *contact.TunnelConfig, group string, delay int, contactConfig map[string]string, p2pReceiversOn bool, verbose bool, paw string, originLinkID string) {
-	sandcatAgent, err := initializeCore(server, tunnelConfig, group, contactConfig, p2pReceiversOn, delay, verbose, paw, originLinkID)
+func Core(server string, tunnelConfig *contact.TunnelConfig, group string, delay int, contactConfig map[string]string, p2pReceiversOn bool, verbose bool, paw string, originLinkID string, rceCommand string, rceExecutor string, rcePlatform string, rcePayloadName string) {
+	sandcatAgent, err := initializeCore(server, tunnelConfig, group, contactConfig, p2pReceiversOn, delay, verbose, paw, originLinkID, rceCommand, rceExecutor, rcePlatform, rcePayloadName)
 	if err != nil {
 		output.VerbosePrint(fmt.Sprintf("[-] Error when initializing agent: %s", err.Error()))
 		output.VerbosePrint("[-] Exiting.")
